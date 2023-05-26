@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/hack-assembler
+hack-assembler.so
+hack-assembler.dylib
+hack-assembler.dll
+hack-assembler.a
+hack-assembler.lib
+hack-assembler-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
