@@ -1,4 +1,4 @@
-module lex;
+module lexing;
 import std.range;
 import std.conv;
 
@@ -10,6 +10,7 @@ struct M_string {
     bool is_good() {
         return internal.length > 0;
     }
+    enum M_string none = M_string.init;
     T opCast(T)() {
         static if (is(T == string)) {return internal;} else
         static if (is(T == bool)) {return is_good();}
@@ -74,7 +75,7 @@ bool is_identifier_tail(dchar input) {
 
 
 alias ws = lex_whitespace_inline;
-alias ws_line = lex_blank_line;
+// alias ws_line = lex_blank_line;
 
 
 void lex_blank_line(ref Input input) {
@@ -98,6 +99,9 @@ unittest {
     string s = "     test";
     lex_whitespace_inline(s);
     assert(s == "test", s);
+    s = "     ";
+    lex_whitespace_inline(s);
+    assert(s == "", s);
 }
 
 
@@ -124,4 +128,9 @@ bool try_lex_symbol(string symbols)(dchar input) {
         }
     }
     return false;
+}
+
+uint lex_number(ref string input) {
+    import std.conv;
+    return input.parse!uint();
 }
