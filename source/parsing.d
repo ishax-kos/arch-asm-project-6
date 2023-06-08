@@ -6,17 +6,17 @@ import symbols;
 import std.range;
 import std.sumtype;
 import std.exception;
-import std.algorithm;
+import std.algorithm.searching: canFind, find;
 
 
-Instruction[] parse(string file_name) {
-    import std.stdio;
-    auto range = File(file_name, "rb").byLine();
+Instruction[] parse(string input) {
+    import std.regex: splitter, ctRegex;
+    auto range = input.splitter(ctRegex!"\r\n|\r\n");
 
     Instruction[] instructions = [];
-    foreach(line_; range) {
-        string line = cast(string) line_;
+    foreach(line; range) {
         ws(line);
+        if (line.empty) {continue;}
         M_instruction result = try_parse_instruction(line);
         if (result) {
             instructions ~= cast(Instruction) result;
@@ -45,6 +45,7 @@ struct M_instruction {
     T opCast(T)() const {
         static if (is(T == bool)) { return is_good; }
         static if (is(T == Instruction)) { return Instruction(internal); }
+        assert(0, T.stringof ~ " is not implemented.");
     }
     this(int number) {
         internal = cast(ushort) number;
@@ -68,7 +69,6 @@ Instruction unwrap(M_instruction m_instruction, string error = "Unwrapped a non-
 M_instruction try_parse_instruction(ref Input input_) {
     Input input = input_.save();
     dchar front = input.front();
-
 
     if (front == '@') {
         return M_instruction(parse_load_a(input));
@@ -101,9 +101,13 @@ M_instruction try_parse_instruction(ref Input input_) {
         instruction |= parse_jump(input);
     }
 
-
     return M_instruction(instruction);
+}
 
+
+unittest {
+    string line = "A D = 1";
+    auto result = cast(Instruction) try_parse_instruction(line);
 }
 
 
@@ -203,7 +207,7 @@ ushort parse_arithmetic(ref string input_) {
 
     enforce(!input.front.is_identifier_tail, invalid_number_or_symbol);
 
-    enforce("+-&|".canFind(input.front), input);
+    enforce("+-&|".canFind(input.front), input_);
     tokens[1] = input.front;
     input.popFront();
 
