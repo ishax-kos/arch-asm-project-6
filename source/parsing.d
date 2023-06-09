@@ -7,25 +7,36 @@ import std.range;
 import std.sumtype;
 import std.exception;
 import std.algorithm.searching: canFind, find;
+import std.format;
 
+int line_count = 0;
+string file_path = "";
 
-Instruction[] parse(string input) {
+ushort[] parse(string input_path) {
+    import std.file: read;
     import std.regex: splitter, ctRegex;
-    auto range = input.splitter(ctRegex!"\r\n|\r\n");
-
-    Instruction[] instructions = [];
+    auto range = (cast(string) read(input_path)).splitter(ctRegex!"\r\n|\n|\r");
+    file_path = input_path;
+    ushort[] instructions = [];
     foreach(line; range) {
+        line_count += 1;
         ws(line);
         if (line.empty) {continue;}
         M_instruction result = try_parse_instruction(line);
         if (result) {
-            instructions ~= cast(Instruction) result;
-            address += 1;
+            instructions ~= result.internal;
+            current_address += 1;
         }
     }
+    // debug { import std.stdio : writeln; try { writeln(symbol_table); } catch (Exception) {} }
+    apply_all_symbols(instructions);
     return instructions;
 }
 
+
+string current_position() {
+    return format!"%s(%d)"(file_path, line_count);
+}
 
 
 align
@@ -97,8 +108,10 @@ M_instruction try_parse_instruction(ref Input input_) {
     instruction |= parse_arithmetic(pos_equals);
 
     if (!pos_semi.empty) {
-        pos_semi.popFront;
-        instruction |= parse_jump(input);
+        ushort jump = parse_jump(pos_semi);
+        // debug { import std.stdio : writeln; try { writeln(jump); } catch (Exception) {} }
+
+        instruction |= jump;
     }
 
     return M_instruction(instruction);
@@ -119,10 +132,15 @@ ushort parse_load_a(ref Input input) {
     if (input.front.is_number()) {
         value = input.lex_number();
         enforce(value < 0b1000_0000_0000_0000);
+        return cast(ushort) value;
     }
-    string identifier = input.lex_identifier();
-    add_reference(identifier);
-    return cast(ushort) value;
+    M_string identifier = try_lex_identifier(input);
+    enforce(identifier, "%s Invalid number or symbol".format(current_position));
+    {
+        add_reference(cast(string) identifier);
+        return cast(ushort) value;
+    }
+
 }
 
 unittest {
@@ -173,7 +191,12 @@ unittest {
 }
 
 
-enum invalid_number_or_symbol = "Invalid expression, valid expressions may use M, A, D, 0, or 1.";
+string invalid_digit_or_register() {
+
+    return format!("%s Invalid expression, "
+    ~"valid expressions may use M, A, D, 0, or 1.")(current_position);
+}
+
 
 
 ushort parse_arithmetic(ref string input_) {
@@ -199,13 +222,13 @@ ushort parse_arithmetic(ref string input_) {
             case 'D': ret = 0b0_001100_000000; break;
             case '1': ret = 0b0_111111_000000; break;
             case '0': ret = 0b0_101010_000000; break;
-            default: throw new Exception(invalid_number_or_symbol);
+            default: throw new Exception(invalid_digit_or_register);
         }
         input_ = input;
         return ret;
     }
 
-    enforce(!input.front.is_identifier_tail, invalid_number_or_symbol);
+    enforce(!input.front.is_identifier_tail, invalid_digit_or_register);
 
     enforce("+-&|".canFind(input.front), input_);
     tokens[1] = input.front;
@@ -213,10 +236,11 @@ ushort parse_arithmetic(ref string input_) {
 
     ws(input);
 
-    enforce("MAD01".canFind(input.front));
+    enforce("MAD01".canFind(input.front), invalid_digit_or_register);
     tokens[2] = input.front;
     input.popFront();
-    enforce(!input.front.is_identifier_tail, invalid_number_or_symbol);
+    // debug { import std.stdio : writeln; try { writeln(input_); } catch (Exception) {} }
+    // enforce(!input.front.is_identifier_tail);
 
 
     ushort ret;
@@ -252,7 +276,7 @@ ushort parse_arithmetic(ref string input_) {
         case "D|M"d: ret = 0b1_010101_000000; break;
         case "M|D"d: ret = 0b1_010101_000000; break;
 
-        default: throw new Exception(invalid_number_or_symbol);
+        default: throw new Exception(invalid_digit_or_register);
     }
     input_ = input;
     return ret;
@@ -260,9 +284,14 @@ ushort parse_arithmetic(ref string input_) {
 
 
 ushort parse_arithmetic_unary(ref string input) {
+    // debug { import std.stdio : writeln; try { writeln(input); } catch (Exception) {} }
     ushort ret = 0;
-
-    if (input.front == '!') {
+    dchar front = input.front;
+    input.popFront();
+    ws(input);
+    enforce(!input.empty() || input.front != ';', "%s Dangling '%s'".format(current_position, front));
+    // enforce(, "%s Dangling '%s'".format(current_position, front));
+    if (front == '!') {
         switch (input.front()) {
             case 'M': ret = 0b1_110001_000000; break;
             case 'A': ret = 0b0_110001_000000; break;
@@ -271,7 +300,7 @@ ushort parse_arithmetic_unary(ref string input) {
             case '1': ret = 0b0_111110_000000; break;
             default: ret = 1; break;
         }
-    }else if (input.front == '-') {
+    }else if (front == '-') {
         switch (input.front()) {
             case 'M': ret = 0b1_110011_000000; break;
             case 'A': ret = 0b0_110011_000000; break;
@@ -283,11 +312,12 @@ ushort parse_arithmetic_unary(ref string input) {
         }
     }
     input.popFront();
-    ws(input);
+    // debug { import std.stdio : writeln; try { writeln(input); } catch (Exception) {} }
     enforce(0
         || ret != 1
-        || input.empty,
-        invalid_number_or_symbol
+        || input.empty
+        || input.front == ';',
+        invalid_digit_or_register
     );
     return ret;
 }
@@ -396,8 +426,8 @@ ushort parse_destination(ref string input_) {
         ushort mask;
         switch (input.front) {
             case 'A': mask = 0b100_000; break;
-            case 'M': mask = 0b010_000; break;
-            case 'D': mask = 0b001_000; break;
+            case 'D': mask = 0b010_000; break;
+            case 'M': mask = 0b001_000; break;
             case '=':
                 input.popFront();
                 input_ = input;

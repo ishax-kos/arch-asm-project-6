@@ -3,7 +3,7 @@ module symbols;
 import std.exception;
 import std.sumtype;
 
-int address = 0;
+ushort current_address = 0;
 
 
 struct Symbol {
@@ -13,7 +13,7 @@ struct Symbol {
 
 enum int not_defined = -1;
 
-int[string] symbol_table;
+ushort[string] symbol_table;
 static this() {
     symbol_table = [
         "SP"     :  0,
@@ -44,45 +44,38 @@ static this() {
     ];
 }
 
+ushort next_address = 16;
 
 void add_symbol(string identifier) {
     enforce(identifier !in symbol_table);
-    symbol_table[identifier] = address;
+    symbol_table[identifier] = current_address;
 }
 
 
-int[][string] reference_table;
+ushort[][string] reference_table;
 
 
 void add_reference(string identifier) {
     if (identifier in reference_table) {
-        reference_table[identifier] ~= address;
+        reference_table[identifier] ~= current_address;
     }
     else {
-        reference_table[identifier] = [address];
+        reference_table[identifier] = [current_address];
     }
 }
 
 
-
-
-// ushort computation_to_binary() {}
-// 0       0b101010
-// 1       0b111111
-// -1      0b111010
-// D       0b001100
-// A       0b110000
-// !D      0b001101
-// !A      0b110001
-// -D      0b001111
-// -A      0b110011
-
-// D+1     0b011111
-// A+1     0b110111
-// D-1     0b001110
-// A-1     0b110010
-// D+A     0b000010
-// D-A     0b010011
-// A-D     0b000111
-// D&A     0b000000
-// D|A     0b010101
+void apply_all_symbols(ushort[] binary) {
+    foreach (identifier, locations; reference_table) {
+        if (identifier in symbol_table) {
+            foreach (location; locations) {
+                binary[location] = symbol_table[identifier];
+            }
+        } else {
+            foreach (location; locations) {
+                binary[location] = next_address;
+            }
+            next_address += 1;
+        }
+    }
+}

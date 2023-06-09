@@ -78,19 +78,29 @@ alias ws = lex_whitespace_inline;
 // alias ws_line = lex_blank_line;
 
 
-void lex_blank_line(ref Input input) {
-    lex_whitespace_inline(input);
-    if (input.front() == '\n') {
-        input.popFront();
-        lex_whitespace_inline(input);
-    }
-}
+// void lex_blank_line(ref Input input) {
+//     lex_whitespace_inline(input);
+//     if (input.front() == '\n') {
+//         input.popFront();
+//         lex_whitespace_inline(input);
+//     }
+// }
 
 
 void lex_whitespace_inline(ref Input input) {
     while (!input.empty()) {
-        if (!input.front.is_white()) {break;}
-        input.popFront();
+        if (input.front == '/') {
+            input.popFront;
+            if (input.front == '/') {
+                input = "";
+                return;
+            }
+        } else
+        if (input.front.is_white()) {
+            input.popFront;
+        } else {
+            break;
+        }
     }
 }
 
